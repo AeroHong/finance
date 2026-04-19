@@ -10,6 +10,7 @@ import TradeCard from '@/components/TradeCard'
 import TradeForm from '@/components/TradeForm'
 import MonthlySummary from '@/components/MonthlySummary'
 import OpenPositions from '@/components/OpenPositions'
+import BalanceCard from '@/components/BalanceCard'
 
 const ALLOWED_UID = process.env.NEXT_PUBLIC_ALLOWED_UID
 
@@ -149,6 +150,9 @@ export default function Home() {
       )}
 
       <main className="max-w-lg mx-auto px-4 py-4 pb-24">
+        {/* 평가자산 */}
+        <BalanceCard user={user} />
+
         {/* 이번 달 요약 */}
         <MonthlySummary trades={thisMonthTrades} month={monthLabel} />
 
