@@ -17,20 +17,16 @@ export async function GET(req: NextRequest) {
     const timestamp = Date.now()
     const params = new URLSearchParams({ timestamp: String(timestamp) })
     const signature = sign(params.toString(), apiSecret)
-    const url = `https://fapi.binance.com/fapi/v2/balance?${params}&signature=${signature}`
+    const url = `https://fapi.binance.com/fapi/v2/account?${params}&signature=${signature}`
 
     const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } })
     if (!res.ok) throw new Error(await res.text())
     const data = await res.json()
 
-    // USDT 잔고만 추출
-    const usdt = data.find((b: { asset: string }) => b.asset === 'USDT')
-    if (!usdt) return NextResponse.json({ error: 'USDT 잔고 없음' }, { status: 404 })
-
     return NextResponse.json({
-      balance: parseFloat(usdt.balance),           // 지갑 잔고
-      crossUnPnl: parseFloat(usdt.crossUnPnl),     // 미실현 손익
-      availableBalance: parseFloat(usdt.availableBalance), // 사용 가능 잔고
+      balance: parseFloat(data.totalWalletBalance),        // 지갑 잔고
+      crossUnPnl: parseFloat(data.totalUnrealizedProfit),  // 전체 미실현 손익 (격리+교차 모두)
+      availableBalance: parseFloat(data.availableBalance), // 사용 가능 잔고
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : '오류'
