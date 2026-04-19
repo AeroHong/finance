@@ -33,6 +33,15 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# service account key (절대 커밋 금지!)
+*service-account*.json
+*serviceAccount*.json
+
 # vercel
 .vercel
 
