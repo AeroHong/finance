@@ -52,9 +52,25 @@ export default function OpenPositions({ user }: Props) {
     return () => clearInterval(id)
   }, [fetchPositions])
 
-  if (loading || (positions.length === 0 && !error)) return null
+  if (loading) return (
+    <div className="mb-4">
+      <h2 className="text-yellow-400 text-sm font-semibold mb-2">⚡ 진행 중</h2>
+      <div className="bg-gray-900 rounded-xl p-4 text-gray-600 text-sm">조회 중...</div>
+    </div>
+  )
 
-  if (error) return null  // 에러 시 섹션 숨김
+  if (error) return (
+    <div className="mb-4">
+      <h2 className="text-yellow-400 text-sm font-semibold mb-2">⚡ 진행 중</h2>
+      <div className="bg-gray-900 rounded-xl p-4 text-gray-600 text-sm">포지션 조회 실패</div>
+    </div>
+  )
+
+  if (positions.length === 0) return (
+    <div className="mb-4">
+      <h2 className="text-gray-600 text-sm font-semibold mb-2">⚡ 진행 중 포지션 없음</h2>
+    </div>
+  )
 
   return (
     <div className="mb-4">
