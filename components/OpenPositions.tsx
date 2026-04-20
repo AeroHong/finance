@@ -66,11 +66,7 @@ export default function OpenPositions({ user }: Props) {
     </div>
   )
 
-  if (positions.length === 0) return (
-    <div className="mb-4">
-      <h2 className="text-gray-600 text-sm font-semibold mb-2">⚡ 진행 중 포지션 없음</h2>
-    </div>
-  )
+  if (positions.length === 0) return null
 
   return (
     <div className="mb-4">

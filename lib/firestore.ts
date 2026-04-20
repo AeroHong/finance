@@ -79,9 +79,23 @@ export async function getMonthlySummary(
 export function calcMonthlySummary(trades: Trade[]): Omit<MonthlySummary, 'id' | 'updatedAt'> {
   const closed = trades.filter((t) => t.status === 'closed' && t.profitLoss != null)
   const wins = closed.filter((t) => (t.profitLoss ?? 0) > 0)
-  const losses = closed.filter((t) => (t.profitLoss ?? 0) <= 0)
+  const losses = closed.filter((t) => (t.profitLoss ?? 0) < 0)
   const totalProfit = closed.reduce((s, t) => s + (t.profitLoss ?? 0), 0)
   const pnls = closed.map((t) => t.profitLoss ?? 0)
+
+  const withR = closed.filter((t) => t.rMultiple != null)
+  const avgRMultiple = withR.length
+    ? withR.reduce((s, t) => s + t.rMultiple!, 0) / withR.length
+    : null
+
+  const avgWin = wins.length ? wins.reduce((s, t) => s + t.profitLoss!, 0) / wins.length : null
+  const avgLossAbs = losses.length
+    ? Math.abs(losses.reduce((s, t) => s + t.profitLoss!, 0) / losses.length)
+    : null
+  const avgPayoffRatio =
+    avgWin != null && avgLossAbs != null && avgLossAbs > 0
+      ? avgWin / avgLossAbs
+      : null
 
   return {
     totalProfit,
@@ -89,14 +103,19 @@ export function calcMonthlySummary(trades: Trade[]): Omit<MonthlySummary, 'id' |
     winCount: wins.length,
     lossCount: losses.length,
     winRate: closed.length ? (wins.length / closed.length) * 100 : 0,
-    avgRMultiple:
-      closed.length
-        ? closed.reduce((s, t) => s + (t.rMultiple ?? 0), 0) / closed.length
-        : 0,
+    avgRMultiple,
+    avgPayoffRatio,
     bestTrade: pnls.length ? Math.max(...pnls) : 0,
     worstTrade: pnls.length ? Math.min(...pnls) : 0,
     totalFee: trades.reduce((s, t) => s + (t.fee ?? 0), 0),
   }
+}
+
+// ── 전체 거래 목록 (차트용, 오름차순) ─────────────────────────
+export async function getAllTrades(uid: string): Promise<Trade[]> {
+  const q = query(tradesCol(uid), orderBy('entryTime', 'asc'))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Trade))
 }
 
 // ── 이번 달 거래 목록 ─────────────────────────────────────────

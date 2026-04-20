@@ -4,6 +4,12 @@ import { useState } from 'react'
 import { Timestamp } from 'firebase/firestore'
 import { Trade, NewTrade } from '@/lib/types'
 
+// datetime-local input은 로컬 타임 기준 → toISOString()(UTC) 대신 로컬 시간으로 변환
+function toLocalISO(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 const PRESET_TAGS = [
   '이란', 'FOMC', '매크로', '이벤트드리븐',
   'MACD', '지지선', '돌파', '아래꼬리',
@@ -43,10 +49,10 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
     lesson: initial?.lesson ?? '',
     tags: initial?.tags ?? [] as string[],
     entryDate: initial?.entryTime
-      ? initial.entryTime.toDate().toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16),
+      ? toLocalISO(initial.entryTime.toDate())
+      : toLocalISO(new Date()),
     exitDate: initial?.exitTime
-      ? initial.exitTime.toDate().toISOString().slice(0, 16)
+      ? toLocalISO(initial.exitTime.toDate())
       : '',
   })
 
@@ -104,8 +110,9 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
         exitPrice: exit,
         quantity: qty,
         leverage: lev,
-        profitLoss: pnl,
-        profitPct: pnlPct,
+        // exit price 없이 수정 시 기존 PnL 보존 (바이낸스 realizedPnl 덮어쓰기 방지)
+        profitLoss: pnl ?? initial?.profitLoss ?? null,
+        profitPct: pnlPct ?? initial?.profitPct ?? null,
         fee: parseFloat(form.fee) || 0,
         entryTime: entryTs,
         exitTime: exitTs,

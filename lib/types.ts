@@ -62,7 +62,8 @@ export interface MonthlySummary {
   winCount: number
   lossCount: number
   winRate: number
-  avgRMultiple: number
+  avgRMultiple: number | null
+  avgPayoffRatio: number | null
   bestTrade: number
   worstTrade: number
   totalFee: number

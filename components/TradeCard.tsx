@@ -76,6 +76,11 @@ export default function TradeCard({ trade, onClick }: Props) {
         {trade.durationHours != null && (
           <span>{trade.durationHours.toFixed(1)}h</span>
         )}
+        {trade.rMultiple != null && (
+          <span className={`ml-auto font-semibold ${trade.rMultiple >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {trade.rMultiple >= 0 ? '+' : ''}{trade.rMultiple.toFixed(2)}R
+          </span>
+        )}
       </div>
 
       {trade.entryReason && (
