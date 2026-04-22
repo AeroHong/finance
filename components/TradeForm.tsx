@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Timestamp } from 'firebase/firestore'
 import { Trade, NewTrade } from '@/lib/types'
 
-// datetime-local input은 로컬 타임 기준 → toISOString()(UTC) 대신 로컬 시간으로 변환
 function toLocalISO(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -31,6 +30,9 @@ interface Props {
 
 export default function TradeForm({ initial, onSave, onClose }: Props) {
   const [saving, setSaving] = useState(false)
+  const [showRiskFields, setShowRiskFields] = useState(
+    !!(initial?.stopLoss || initial?.takeProfit)
+  )
   const [form, setForm] = useState({
     symbol: initial?.symbol ?? 'BTCUSDT',
     direction: initial?.direction ?? 'long' as 'long' | 'short',
@@ -41,18 +43,21 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
     fee: initial?.fee?.toString() ?? '0',
     stopLoss: initial?.stopLoss?.toString() ?? '',
     takeProfit: initial?.takeProfit?.toString() ?? '',
-    status: initial?.status ?? 'closed' as 'open' | 'closed',
     entryType: initial?.entryType ?? '' as Trade['entryType'],
     entryReason: initial?.entryReason ?? '',
     exitReason: initial?.exitReason ?? '',
     notes: initial?.notes ?? '',
     lesson: initial?.lesson ?? '',
     tags: initial?.tags ?? [] as string[],
-    entryDate: initial?.entryTime
-      ? toLocalISO(initial.entryTime.toDate())
-      : toLocalISO(new Date()),
+    // exitTime = 청산 시간 (바이낸스 동기화 시 entryTime에 청산시간이 저장됨)
     exitDate: initial?.exitTime
       ? toLocalISO(initial.exitTime.toDate())
+      : initial?.entryTime
+      ? toLocalISO(initial.entryTime.toDate())
+      : toLocalISO(new Date()),
+    // entryDate = 실제 진입 시간 (바이낸스에서는 알 수 없어 보통 비어있음)
+    entryDate: initial?.entryTime && initial?.exitTime
+      ? toLocalISO(initial.entryTime.toDate())
       : '',
   })
 
@@ -88,10 +93,13 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
       const pnl = calcPnL()
       const pnlPct = pnl != null && entry ? (pnl / (entry * qty)) * 100 : null
 
-      const entryTs = Timestamp.fromDate(new Date(form.entryDate))
+      // exitDate = 청산 시간 (필수)
       const exitTs = form.exitDate ? Timestamp.fromDate(new Date(form.exitDate)) : null
+      // entryDate = 진입 시간 (선택)
+      const entryTs = form.entryDate ? Timestamp.fromDate(new Date(form.entryDate)) : exitTs!
+
       const durationHours =
-        exitTs && entryTs
+        exitTs && entryTs && form.entryDate
           ? (exitTs.toMillis() - entryTs.toMillis()) / 3600000
           : null
 
@@ -110,14 +118,14 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
         exitPrice: exit,
         quantity: qty,
         leverage: lev,
-        // exit price 없이 수정 시 기존 PnL 보존 (바이낸스 realizedPnl 덮어쓰기 방지)
         profitLoss: pnl ?? initial?.profitLoss ?? null,
         profitPct: pnlPct ?? initial?.profitPct ?? null,
         fee: parseFloat(form.fee) || 0,
-        entryTime: entryTs,
-        exitTime: exitTs,
+        // entryTime 필드에 청산시간 저장 (바이낸스 동기화 방식과 통일)
+        entryTime: exitTs ?? entryTs,
+        exitTime: form.entryDate ? entryTs : null,
         durationHours,
-        status: form.status,
+        status: 'closed',
         stopLoss,
         takeProfit,
         rMultiple,
@@ -183,24 +191,6 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
               placeholder="BTCUSDT"
               className="flex-1 bg-gray-800 text-white rounded-xl px-3 py-2 text-sm uppercase"
             />
-            <div className="flex rounded-xl overflow-hidden border border-gray-700 flex-shrink-0">
-              {(['closed', 'open'] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => set('status', s)}
-                  className={`px-3 py-2 text-xs font-semibold transition-colors ${
-                    form.status === s
-                      ? s === 'closed'
-                        ? 'bg-gray-600 text-white'
-                        : 'bg-yellow-600 text-white'
-                      : 'bg-gray-800 text-gray-400'
-                  }`}
-                >
-                  {s === 'closed' ? '완료' : '진행'}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* 가격 */}
@@ -230,7 +220,7 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
             </div>
           </div>
 
-          {/* 수량 + 레버리지 */}
+          {/* 수량 + 레버리지 + 수수료 */}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="text-gray-400 text-xs mb-1 block">수량 (BTC)</label>
@@ -266,50 +256,24 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
             </div>
           </div>
 
-          {/* 손절/목표 */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-gray-400 text-xs mb-1 block">손절가</label>
-              <input
-                type="number"
-                step="any"
-                value={form.stopLoss}
-                onChange={(e) => set('stopLoss', e.target.value)}
-                placeholder="74000"
-                className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-gray-400 text-xs mb-1 block">목표가</label>
-              <input
-                type="number"
-                step="any"
-                value={form.takeProfit}
-                onChange={(e) => set('takeProfit', e.target.value)}
-                placeholder="77000"
-                className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
           {/* 시간 */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">진입 시간 *</label>
+              <label className="text-gray-400 text-xs mb-1 block">청산 시간 *</label>
               <input
                 required
                 type="datetime-local"
-                value={form.entryDate}
-                onChange={(e) => set('entryDate', e.target.value)}
+                value={form.exitDate}
+                onChange={(e) => set('exitDate', e.target.value)}
                 className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm"
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">청산 시간</label>
+              <label className="text-gray-400 text-xs mb-1 block">진입 시간 <span className="text-gray-600">(선택)</span></label>
               <input
                 type="datetime-local"
-                value={form.exitDate}
-                onChange={(e) => set('exitDate', e.target.value)}
+                value={form.entryDate}
+                onChange={(e) => set('entryDate', e.target.value)}
                 className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm"
               />
             </div>
@@ -326,6 +290,44 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
               {pnl.toFixed(2)} USDT
             </div>
           )}
+
+          {/* 손절/목표 (접기/펼치기) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowRiskFields((v) => !v)}
+              className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors"
+            >
+              <span>{showRiskFields ? '▼' : '▶'}</span>
+              <span>손절가 / 목표가 <span className="text-gray-600">(선택 · R배수 계산용)</span></span>
+            </button>
+            {showRiskFields && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">손절가</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={form.stopLoss}
+                    onChange={(e) => set('stopLoss', e.target.value)}
+                    placeholder="74000"
+                    className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">목표가</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={form.takeProfit}
+                    onChange={(e) => set('takeProfit', e.target.value)}
+                    placeholder="77000"
+                    className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* 진입 타입 */}
           <div>

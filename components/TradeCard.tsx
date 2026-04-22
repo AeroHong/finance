@@ -18,18 +18,24 @@ function formatTime(ts: Timestamp | null) {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+const ENTRY_TYPE_LABELS: Record<string, string> = {
+  event_driven: '이벤트',
+  technical: '기술적',
+  algorithm: '알고리즘',
+  mixed: '복합',
+}
+
 export default function TradeCard({ trade, onClick }: Props) {
   const isLong = trade.direction === 'long'
   const isWin = (trade.profitLoss ?? 0) > 0
-  const isOpen = trade.status === 'open'
 
-  const pnlColor = isOpen
-    ? 'text-yellow-400'
-    : isWin
-    ? 'text-green-400'
-    : 'text-red-400'
-
+  const pnlColor = isWin ? 'text-green-400' : 'text-red-400'
   const dirBg = isLong ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+
+  // Binance 동기화 거래: entryTime = 청산 시간, entryPrice = 청산 평단가
+  const closeTime = trade.exitTime ?? trade.entryTime
+
+  const hasJournal = !!(trade.entryReason || trade.lesson || trade.notes)
 
   return (
     <button
@@ -47,9 +53,9 @@ export default function TradeCard({ trade, onClick }: Props) {
           {trade.leverage > 0 && (
             <span className="text-gray-500 text-xs">{trade.leverage}x</span>
           )}
-          {isOpen && (
-            <span className="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-0.5 rounded-full">
-              진행 중
+          {trade.entryType && (
+            <span className="text-xs bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded-full">
+              {ENTRY_TYPE_LABELS[trade.entryType] ?? trade.entryType}
             </span>
           )}
         </div>
@@ -70,12 +76,11 @@ export default function TradeCard({ trade, onClick }: Props) {
       </div>
 
       <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-        <span>진입 {formatPrice(trade.entryPrice)}</span>
-        {trade.exitPrice && <span>청산 {formatPrice(trade.exitPrice)}</span>}
-        <span>{formatTime(trade.entryTime)}</span>
-        {trade.durationHours != null && (
-          <span>{trade.durationHours.toFixed(1)}h</span>
+        <span>평단가 {formatPrice(trade.entryPrice)}</span>
+        {trade.quantity > 0 && (
+          <span>{trade.quantity.toFixed(4)} BTC</span>
         )}
+        <span>청산 {formatTime(closeTime)}</span>
         {trade.rMultiple != null && (
           <span className={`ml-auto font-semibold ${trade.rMultiple >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {trade.rMultiple >= 0 ? '+' : ''}{trade.rMultiple.toFixed(2)}R
@@ -83,9 +88,24 @@ export default function TradeCard({ trade, onClick }: Props) {
         )}
       </div>
 
-      {trade.entryReason && (
-        <div className="mt-2 text-xs text-gray-400 line-clamp-1">
-          {trade.entryReason}
+      {/* 일지 기록 영역 */}
+      {hasJournal && (
+        <div className="mt-2 space-y-1">
+          {trade.entryReason && (
+            <div className="text-xs text-gray-400 line-clamp-1">
+              💡 {trade.entryReason}
+            </div>
+          )}
+          {trade.lesson && (
+            <div className="text-xs text-indigo-400 line-clamp-1">
+              ✏️ {trade.lesson}
+            </div>
+          )}
+          {!trade.entryReason && trade.notes && (
+            <div className="text-xs text-gray-500 line-clamp-1">
+              {trade.notes}
+            </div>
+          )}
         </div>
       )}
 

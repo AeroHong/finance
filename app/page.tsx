@@ -219,7 +219,7 @@ export default function Home() {
       )}
 
       {/* ── 메인 콘텐츠 ── */}
-      <main className="lg:pl-56 px-4 py-4 pb-24 lg:pb-8 lg:px-8 lg:py-8">
+      <main className="px-4 py-4 pb-24 lg:ml-56 lg:px-8 lg:py-8 lg:pb-8">
         {tab === 'dashboard' && (
           <DashboardTab
             user={user}
