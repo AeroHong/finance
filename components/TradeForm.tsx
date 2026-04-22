@@ -152,18 +152,23 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
   const pnl = calcPnL()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
-      <div className="w-full max-w-lg bg-gray-900 rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto">
-        {/* 헤더 */}
-        <div className="sticky top-0 bg-gray-900 flex items-center justify-between px-4 py-3 border-b border-gray-800 rounded-t-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-lg bg-gray-900 rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[90vh]">
+        {/* 헤더 - flex-shrink-0으로 항상 고정 */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800 rounded-t-2xl">
           <h2 className="text-white font-semibold">
             {initial?.id ? '거래 수정' : '거래 추가'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none px-1">
             ✕
           </button>
         </div>
 
+        {/* 스크롤 영역 */}
+        <div className="overflow-y-auto flex-1">
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {/* 방향 + 심볼 */}
           <div className="flex gap-2">
@@ -427,6 +432,7 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
             {saving ? '저장 중...' : '저장'}
           </button>
         </form>
+        </div>
       </div>
     </div>
   )
