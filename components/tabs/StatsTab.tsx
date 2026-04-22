@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import dynamic from 'next/dynamic'
+import * as XLSX from 'xlsx'
 import { Trade } from '@/lib/types'
 import {
   buildCumulativeSeries,
@@ -38,61 +39,196 @@ function formatTs(ts: { toDate(): Date } | null): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function escapeCsv(value: string | number | null | undefined): string {
-  if (value == null) return ''
-  const str = String(value)
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`
-  }
-  return str
-}
-
-function exportTradesToCsv(trades: Trade[]) {
-  const headers = [
-    '청산시간', '방향', '심볼', '청산평단가', '수량(BTC)', '레버리지',
-    '손익(USDT)', '수익률(%)', '수수료', 'R배수', '보유시간(h)',
-    '진입타입', '진입근거', '청산근거', '반성', '교훈', '태그',
-  ]
+function exportToExcel(trades: Trade[]) {
+  const wb = XLSX.utils.book_new()
 
   const sorted = [...trades].sort(
     (a, b) => (a.exitTime ?? a.entryTime).toMillis() - (b.exitTime ?? b.entryTime).toMillis()
   )
 
-  const rows = sorted.map((t) => [
-    formatTs(t.exitTime ?? t.entryTime),
-    t.direction === 'long' ? '롱' : '숏',
-    t.symbol,
-    t.entryPrice,
-    t.quantity,
-    t.leverage || '',
-    t.profitLoss ?? '',
-    t.profitPct ?? '',
-    t.fee,
-    t.rMultiple ?? '',
-    t.durationHours != null ? t.durationHours.toFixed(2) : '',
-    t.entryType,
-    t.entryReason,
-    t.exitReason,
-    t.notes,
-    t.lesson,
-    t.tags.join(' / '),
-  ])
+  // ── Sheet 1: 거래 목록 ────────────────────────────────
+  const tradeRows = sorted.map((t) => ({
+    '청산시간': formatTs(t.exitTime ?? t.entryTime),
+    '방향': t.direction === 'long' ? '롱' : '숏',
+    '심볼': t.symbol,
+    '청산평단가': t.entryPrice,
+    '수량(BTC)': t.quantity,
+    '레버리지': t.leverage || '',
+    '손익(USDT)': t.profitLoss ?? '',
+    '수익률(%)': t.profitPct != null ? parseFloat(t.profitPct.toFixed(2)) : '',
+    '수수료': t.fee,
+    'R배수': t.rMultiple != null ? parseFloat(t.rMultiple.toFixed(3)) : '',
+    '보유시간(h)': t.durationHours != null ? parseFloat(t.durationHours.toFixed(2)) : '',
+    '진입타입': t.entryType,
+    '진입근거': t.entryReason,
+    '청산근거': t.exitReason,
+    '반성': t.notes,
+    '교훈': t.lesson,
+    '태그': t.tags.join(' / '),
+  }))
+  const wsTradeList = XLSX.utils.json_to_sheet(tradeRows)
+  wsTradeList['!cols'] = [
+    { wch: 18 }, { wch: 6 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
+    { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+    { wch: 10 }, { wch: 10 }, { wch: 30 }, { wch: 30 }, { wch: 30 },
+    { wch: 30 }, { wch: 20 },
+  ]
+  XLSX.utils.book_append_sheet(wb, wsTradeList, '거래목록')
 
-  const csvContent =
-    '\uFEFF' + // BOM for Excel UTF-8
-    [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(','))
-      .join('\n')
+  // ── Sheet 2: 통계 요약 ────────────────────────────────
+  const closed = sorted.filter((t) => t.profitLoss != null)
+  const wins = closed.filter((t) => (t.profitLoss ?? 0) > 0)
+  const losses = closed.filter((t) => (t.profitLoss ?? 0) < 0)
+  const totalPnl = closed.reduce((s, t) => s + (t.profitLoss ?? 0), 0)
+  const totalFee = closed.reduce((s, t) => s + t.fee, 0)
+  const winRate = closed.length ? (wins.length / closed.length) * 100 : 0
+  const avgWin = wins.length ? wins.reduce((s, t) => s + (t.profitLoss ?? 0), 0) / wins.length : null
+  const avgLoss = losses.length ? losses.reduce((s, t) => s + (t.profitLoss ?? 0), 0) / losses.length : null
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
+  const pnls = closed.map((t) => t.profitLoss!)
+  const mean = pnls.length ? pnls.reduce((s, v) => s + v, 0) / pnls.length : 0
+  const variance = pnls.length ? pnls.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / pnls.length : 0
+  const stddev = Math.sqrt(variance)
+  const sharpe = stddev > 0 ? mean / stddev : null
+  const downVar = pnls.length ? pnls.reduce((s, v) => s + Math.pow(Math.min(v, 0), 2), 0) / pnls.length : 0
+  const downStd = Math.sqrt(downVar)
+  const sortino = downStd > 0 ? mean / downStd : null
+  const avgPayoff = avgWin != null && avgLoss != null && avgLoss !== 0
+    ? Math.abs(avgWin / avgLoss) : null
+
+  const maxDrawdown = (() => {
+    let peak = 0, cum = 0, maxDD = 0
+    for (const t of sorted) {
+      cum += t.profitLoss ?? 0
+      if (cum > peak) peak = cum
+      const dd = peak - cum
+      if (dd > maxDD) maxDD = dd
+    }
+    return maxDD
+  })()
+
+  const bestTrade = closed.length ? Math.max(...closed.map((t) => t.profitLoss ?? 0)) : null
+  const worstTrade = closed.length ? Math.min(...closed.map((t) => t.profitLoss ?? 0)) : null
+
+  const summaryRows = [
+    { '항목': '=== 거래 개요 ===' },
+    { '항목': '총 거래 수', '값': closed.length },
+    { '항목': '승리 거래', '값': wins.length },
+    { '항목': '손실 거래', '값': losses.length },
+    { '항목': '승률 (%)', '값': parseFloat(winRate.toFixed(2)) },
+    { '항목': '' },
+    { '항목': '=== 손익 ===' },
+    { '항목': '총 손익 (USDT)', '값': parseFloat(totalPnl.toFixed(2)) },
+    { '항목': '총 수수료 (USDT)', '값': parseFloat(totalFee.toFixed(2)) },
+    { '항목': '순 손익 (USDT)', '값': parseFloat((totalPnl - totalFee).toFixed(2)) },
+    { '항목': '최대 이익 거래', '값': bestTrade != null ? parseFloat(bestTrade.toFixed(2)) : '' },
+    { '항목': '최대 손실 거래', '값': worstTrade != null ? parseFloat(worstTrade.toFixed(2)) : '' },
+    { '항목': '평균 이익 (USDT)', '값': avgWin != null ? parseFloat(avgWin.toFixed(2)) : '' },
+    { '항목': '평균 손실 (USDT)', '값': avgLoss != null ? parseFloat(avgLoss.toFixed(2)) : '' },
+    { '항목': '최대 낙폭 (USDT)', '값': parseFloat(maxDrawdown.toFixed(2)) },
+    { '항목': '' },
+    { '항목': '=== 고급 지표 ===' },
+    { '항목': '평균 손익비', '값': avgPayoff != null ? parseFloat(avgPayoff.toFixed(3)) : '' },
+    { '항목': '샤프 비율', '값': sharpe != null ? parseFloat(sharpe.toFixed(4)) : '' },
+    { '항목': '소르티노 비율', '값': sortino != null ? parseFloat(sortino.toFixed(4)) : '' },
+    { '항목': '평균 손익 (USDT)', '값': parseFloat(mean.toFixed(2)) },
+    { '항목': '손익 표준편차', '값': parseFloat(stddev.toFixed(2)) },
+    { '항목': '' },
+    { '항목': '=== 기준 ===' },
+    { '항목': '초기 자산 (USDT)', '값': 7000 },
+    { '항목': '총 수익률 (%)', '값': parseFloat(((totalPnl / 7000) * 100).toFixed(2)) },
+  ]
+  const wsSummary = XLSX.utils.json_to_sheet(summaryRows)
+  wsSummary['!cols'] = [{ wch: 22 }, { wch: 14 }]
+  XLSX.utils.book_append_sheet(wb, wsSummary, '통계요약')
+
+  // ── Sheet 3: 월별 손익 ────────────────────────────────
+  const monthMap = new Map<string, { profit: number; trades: number; wins: number; fees: number }>()
+  for (const t of sorted) {
+    const d = (t.exitTime ?? t.entryTime).toDate()
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const prev = monthMap.get(key) ?? { profit: 0, trades: 0, wins: 0, fees: 0 }
+    monthMap.set(key, {
+      profit: prev.profit + (t.profitLoss ?? 0),
+      trades: prev.trades + 1,
+      wins: prev.wins + ((t.profitLoss ?? 0) > 0 ? 1 : 0),
+      fees: prev.fees + t.fee,
+    })
+  }
+  const monthlyRows = Array.from(monthMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, v]) => ({
+      '월': month,
+      '손익(USDT)': parseFloat(v.profit.toFixed(2)),
+      '순손익(USDT)': parseFloat((v.profit - v.fees).toFixed(2)),
+      '거래수': v.trades,
+      '승리': v.wins,
+      '손실': v.trades - v.wins,
+      '승률(%)': v.trades ? parseFloat(((v.wins / v.trades) * 100).toFixed(1)) : 0,
+      '수수료(USDT)': parseFloat(v.fees.toFixed(2)),
+    }))
+  const wsMonthly = XLSX.utils.json_to_sheet(monthlyRows)
+  wsMonthly['!cols'] = [
+    { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 8 },
+    { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 14 },
+  ]
+  XLSX.utils.book_append_sheet(wb, wsMonthly, '월별손익')
+
+  // ── Sheet 4: 누적손익 시계열 ──────────────────────────
+  let cumPnl = 0
+  const cumulRows = sorted
+    .filter((t) => t.profitLoss != null)
+    .map((t, i) => {
+      cumPnl += t.profitLoss ?? 0
+      return {
+        '번호': i + 1,
+        '청산시간': formatTs(t.exitTime ?? t.entryTime),
+        '방향': t.direction === 'long' ? '롱' : '숏',
+        '손익(USDT)': parseFloat((t.profitLoss ?? 0).toFixed(2)),
+        '누적손익(USDT)': parseFloat(cumPnl.toFixed(2)),
+        '누적수익률(%)': parseFloat(((cumPnl / 7000) * 100).toFixed(2)),
+      }
+    })
+  const wsCumul = XLSX.utils.json_to_sheet(cumulRows)
+  wsCumul['!cols'] = [
+    { wch: 6 }, { wch: 18 }, { wch: 6 }, { wch: 12 }, { wch: 16 }, { wch: 16 },
+  ]
+  XLSX.utils.book_append_sheet(wb, wsCumul, '누적손익')
+
+  // ── Sheet 5: 승패 분석 ────────────────────────────────
+  const winLossRows = [
+    { '구분': '=== 승리 거래 ===' },
+    ...wins.sort((a, b) => (b.profitLoss ?? 0) - (a.profitLoss ?? 0)).map((t) => ({
+      '구분': '승리',
+      '청산시간': formatTs(t.exitTime ?? t.entryTime),
+      '방향': t.direction === 'long' ? '롱' : '숏',
+      '손익(USDT)': parseFloat((t.profitLoss ?? 0).toFixed(2)),
+      'R배수': t.rMultiple != null ? parseFloat(t.rMultiple.toFixed(3)) : '',
+      '태그': t.tags.join(' / '),
+      '교훈': t.lesson,
+    })),
+    { '구분': '' },
+    { '구분': '=== 손실 거래 ===' },
+    ...losses.sort((a, b) => (a.profitLoss ?? 0) - (b.profitLoss ?? 0)).map((t) => ({
+      '구분': '손실',
+      '청산시간': formatTs(t.exitTime ?? t.entryTime),
+      '방향': t.direction === 'long' ? '롱' : '숏',
+      '손익(USDT)': parseFloat((t.profitLoss ?? 0).toFixed(2)),
+      'R배수': t.rMultiple != null ? parseFloat(t.rMultiple.toFixed(3)) : '',
+      '태그': t.tags.join(' / '),
+      '교훈': t.lesson,
+    })),
+  ]
+  const wsWinLoss = XLSX.utils.json_to_sheet(winLossRows)
+  wsWinLoss['!cols'] = [
+    { wch: 18 }, { wch: 18 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 20 }, { wch: 30 },
+  ]
+  XLSX.utils.book_append_sheet(wb, wsWinLoss, '승패분석')
+
+  // ── 파일 저장 ─────────────────────────────────────────
   const now = new Date()
-  const filename = `매매일지_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.csv`
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+  const filename = `매매일지_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.xlsx`
+  XLSX.writeFile(wb, filename)
 }
 
 export default function StatsTab({ trades, loading }: Props) {
@@ -118,12 +254,12 @@ export default function StatsTab({ trades, loading }: Props) {
       <div className="flex items-center justify-between">
         <h2 className="text-gray-400 text-sm font-semibold">통계 ({trades.length}건)</h2>
         <button
-          onClick={() => exportTradesToCsv(trades)}
+          onClick={() => exportToExcel(trades)}
           disabled={trades.length === 0}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 text-xs rounded-xl transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-800 hover:bg-green-700 disabled:opacity-40 text-green-100 text-xs rounded-xl transition-colors"
         >
           <span>⬇</span>
-          <span>CSV 다운로드</span>
+          <span>Excel 보고서</span>
         </button>
       </div>
 
