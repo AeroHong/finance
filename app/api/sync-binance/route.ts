@@ -23,6 +23,15 @@ interface BinanceTrade {
   maker: boolean
 }
 
+interface BinanceIncome {
+  symbol: string
+  incomeType: string
+  income: string
+  asset: string
+  time: number
+  tranId: number
+}
+
 // Binance 7일 제한 → 구간 분할 페이지네이션
 async function fetchAllTrades(symbol: string, fromMs: number, toMs: number): Promise<BinanceTrade[]> {
   const apiKey = process.env.BINANCE_API_KEY!
@@ -65,6 +74,42 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+// 펀딩피 조회 (FUNDING_FEE)
+async function fetchFundingFees(fromMs: number, toMs: number): Promise<BinanceIncome[]> {
+  const apiKey = process.env.BINANCE_API_KEY!
+  const apiSecret = process.env.BINANCE_API_SECRET!
+  const all: BinanceIncome[] = []
+
+  let cursor = fromMs
+  while (cursor < toMs) {
+    const end = Math.min(cursor + SEVEN_DAYS, toMs)
+    const timestamp = Date.now()
+    const params = new URLSearchParams({
+      incomeType: 'FUNDING_FEE',
+      startTime: String(cursor),
+      endTime: String(end),
+      limit: '1000',
+      timestamp: String(timestamp),
+    })
+    const signature = sign(params.toString(), apiSecret)
+    const url = `https://fapi.binance.com/fapi/v1/income?${params}&signature=${signature}`
+
+    const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } })
+    if (!res.ok) {
+      const errText = await res.text()
+      if (res.status === 400) break
+      throw new Error(`Binance income ${res.status}: ${errText}`)
+    }
+    const batch: BinanceIncome[] = await res.json()
+    all.push(...batch)
+    cursor = end + 1
+
+    if (batch.length === 1000) await sleep(200)
+  }
+
+  return all
+}
+
 // positionSide 기반 direction 판단
 // 청산 fill 기준이므로 BOTH 모드에서 방향 반전 (SELL=롱 청산, BUY=숏 청산)
 function getDirection(trade: BinanceTrade): 'long' | 'short' {
@@ -105,6 +150,21 @@ export async function POST(req: NextRequest) {
     let latestTime = lastSyncTime
     const errors: string[] = []
 
+    // 펀딩피 데이터 수집
+    let fundingFees: BinanceIncome[] = []
+    try {
+      fundingFees = await fetchFundingFees(fromMs, toMs)
+    } catch (e) {
+      errors.push(`펀딩피 조회 실패: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    // 심볼별 펀딩피 총액 계산
+    const fundingBySymbol = new Map<string, number>()
+    for (const f of fundingFees) {
+      const current = fundingBySymbol.get(f.symbol) || 0
+      fundingBySymbol.set(f.symbol, current + parseFloat(f.income))
+    }
+
     for (const symbol of SYMBOLS) {
       let raw: BinanceTrade[]
       try {
@@ -140,6 +200,13 @@ export async function POST(req: NextRequest) {
       let batch = adminDb.batch()
       let batchCount = 0
 
+      // 심볼별 거래 건수 계산 (펀딩피 배분용)
+      const validTrades = Array.from(orderMap.entries()).filter(
+        ([orderId, fills]) => !existingIds.has(orderId) && fills.reduce((s, f) => s + parseFloat(f.realizedPnl), 0) !== 0
+      )
+      const tradeCount = validTrades.length
+      const fundingPerTrade = tradeCount > 0 ? (fundingBySymbol.get(symbol) || 0) / tradeCount : 0
+
       for (const [orderId, fills] of orderMap) {
         if (existingIds.has(orderId)) continue
 
@@ -166,6 +233,7 @@ export async function POST(req: NextRequest) {
           profitLoss: totalPnl !== 0 ? totalPnl : null,
           profitPct: null,
           fee: totalFee,
+          fundingFee: fundingPerTrade,
           entryTime: Timestamp.fromMillis(tradeTime),
           exitTime: null,
           durationHours: null,

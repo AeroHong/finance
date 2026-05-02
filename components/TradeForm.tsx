@@ -121,6 +121,7 @@ export default function TradeForm({ initial, onSave, onClose }: Props) {
         profitLoss: pnl ?? initial?.profitLoss ?? null,
         profitPct: pnlPct ?? initial?.profitPct ?? null,
         fee: parseFloat(form.fee) || 0,
+        fundingFee: initial?.fundingFee ?? 0,
         // entryTime 필드에 청산시간 저장 (바이낸스 동기화 방식과 통일)
         entryTime: exitTs ?? entryTs,
         exitTime: form.entryDate ? entryTs : null,

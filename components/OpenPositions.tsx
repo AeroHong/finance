@@ -18,6 +18,12 @@ interface Props {
   user: User
 }
 
+interface Balance {
+  balance: number
+  crossUnPnl: number
+  availableBalance: number
+}
+
 function formatPrice(s: string) {
   const n = parseFloat(s)
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
@@ -25,18 +31,31 @@ function formatPrice(s: string) {
 
 export default function OpenPositions({ user }: Props) {
   const [positions, setPositions] = useState<BinancePosition[]>([])
+  const [balance, setBalance] = useState<Balance | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchPositions = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       const token = await getIdToken(user)
-      const res = await fetch('/api/positions', {
+
+      // 포지션 조회
+      const posRes = await fetch('/api/positions', {
         headers: { Authorization: `Bearer ${token}` },
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setPositions(data.positions)
+      const posData = await posRes.json()
+      if (!posRes.ok) throw new Error(posData.error)
+      setPositions(posData.positions)
+
+      // 잔고 조회
+      const balRes = await fetch('/api/balance', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (balRes.ok) {
+        const balData = await balRes.json()
+        setBalance(balData)
+      }
+
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '조회 실패')
@@ -46,11 +65,11 @@ export default function OpenPositions({ user }: Props) {
   }, [user])
 
   useEffect(() => {
-    fetchPositions()
+    fetchData()
     // 30초마다 갱신
-    const id = setInterval(fetchPositions, 30000)
+    const id = setInterval(fetchData, 30000)
     return () => clearInterval(id)
-  }, [fetchPositions])
+  }, [fetchData])
 
   if (loading) return (
     <div className="mb-4">
@@ -83,6 +102,9 @@ export default function OpenPositions({ user }: Props) {
           const mark = parseFloat(p.markPrice)
           const pnlPct = entry > 0 ? ((mark - entry) / entry) * (isLong ? 1 : -1) * parseFloat(p.leverage) * 100 : 0
 
+          // 지갑 자산 대비 퍼센트
+          const walletPct = balance ? (pnl / balance.balance) * 100 : 0
+
           return (
             <div
               key={`${p.symbol}-${p.positionSide}`}
@@ -104,8 +126,15 @@ export default function OpenPositions({ user }: Props) {
                   <div className="font-bold">
                     {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} <span className="text-xs">USDT</span>
                   </div>
-                  <div className="text-xs">
-                    {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                  <div className="text-xs space-y-0.5">
+                    <div>
+                      ROI: {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                    </div>
+                    {balance && (
+                      <div className="text-gray-400">
+                        지갑: {walletPct >= 0 ? '+' : ''}{walletPct.toFixed(2)}%
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

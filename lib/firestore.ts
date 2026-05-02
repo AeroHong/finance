@@ -108,6 +108,7 @@ export function calcMonthlySummary(trades: Trade[]): Omit<MonthlySummary, 'id' |
     bestTrade: pnls.length ? Math.max(...pnls) : 0,
     worstTrade: pnls.length ? Math.min(...pnls) : 0,
     totalFee: trades.reduce((s, t) => s + (t.fee ?? 0), 0),
+    totalFundingFee: trades.reduce((s, t) => s + (t.fundingFee ?? 0), 0),
   }
 }
 

@@ -13,6 +13,7 @@ export interface Trade {
   profitLoss: number | null  // USDT 손익
   profitPct: number | null   // 수익률 %
   fee: number
+  fundingFee: number         // 펀딩피 (USDT)
   entryTime: Timestamp
   exitTime: Timestamp | null
   durationHours: number | null
@@ -67,5 +68,6 @@ export interface MonthlySummary {
   bestTrade: number
   worstTrade: number
   totalFee: number
+  totalFundingFee: number
   updatedAt: Timestamp
 }
