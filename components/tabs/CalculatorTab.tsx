@@ -11,15 +11,15 @@ interface CalculatorTabProps {
   user: User
 }
 
-type Section = '신규 진입' | '분할 진입'
+type Section = '전략 계획기' | '분할 진입'
 
-const SECTIONS: Section[] = ['신규 진입', '분할 진입']
+const SECTIONS: Section[] = ['전략 계획기', '분할 진입']
 
 export default function CalculatorTab({ user }: CalculatorTabProps) {
   const [btcPrice, setBtcPrice] = useState<number | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
   const [positions, setPositions] = useState<BinancePosition[]>([])
-  const [section, setSection] = useState<Section>('신규 진입')
+  const [section, setSection] = useState<Section>('전략 계획기')
 
   return (
     <div>
@@ -50,7 +50,7 @@ export default function CalculatorTab({ user }: CalculatorTabProps) {
       </div>
 
       {/* 내용 */}
-      {section === '신규 진입' && (
+      {section === '전략 계획기' && (
         <EntryCalculator
           currentPrice={btcPrice}
           balance={balance}

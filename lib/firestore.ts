@@ -14,7 +14,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { Trade, NewTrade, MonthlySummary } from '@/lib/types'
+import { Trade, NewTrade, MonthlySummary, Strategy, NewStrategy } from '@/lib/types'
 
 function tradesCol(uid: string) {
   return collection(db, 'users', uid, 'trades')
@@ -117,6 +117,37 @@ export async function getAllTrades(uid: string): Promise<Trade[]> {
   const q = query(tradesCol(uid), orderBy('entryTime', 'asc'))
   const snap = await getDocs(q)
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Trade))
+}
+
+// ── 전략 ─────────────────────────────────────────────────────
+function strategiesCol(uid: string) {
+  return collection(db, 'users', uid, 'strategies')
+}
+
+export async function getStrategies(uid: string): Promise<Strategy[]> {
+  const q = query(strategiesCol(uid), orderBy('createdAt', 'desc'), limit(20))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Strategy))
+}
+
+export async function saveStrategy(uid: string, strategy: NewStrategy): Promise<string> {
+  const ref = await addDoc(strategiesCol(uid), {
+    ...strategy,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function updateStrategy(uid: string, strategyId: string, updates: Partial<NewStrategy>): Promise<void> {
+  await updateDoc(doc(strategiesCol(uid), strategyId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function deleteStrategy(uid: string, strategyId: string): Promise<void> {
+  await deleteDoc(doc(strategiesCol(uid), strategyId))
 }
 
 // ── 이번 달 거래 목록 ─────────────────────────────────────────

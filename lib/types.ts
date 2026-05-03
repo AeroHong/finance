@@ -46,6 +46,32 @@ export interface Trade {
 
 export type NewTrade = Omit<Trade, 'id' | 'createdAt' | 'updatedAt'>
 
+export interface StrategyEntry {
+  id: string
+  price: number
+  qty: number
+  executed: boolean
+}
+
+export interface Strategy {
+  id: string
+  name: string
+  direction: 'long' | 'short'
+  riskPct: number
+  rrRatio: number
+  leverage: number
+  entries: StrategyEntry[]
+  avgEntry: number
+  sl: number
+  tp: number
+  totalQty: number
+  status: 'active' | 'closed'
+  createdAt: import('firebase/firestore').Timestamp
+  updatedAt: import('firebase/firestore').Timestamp
+}
+
+export type NewStrategy = Omit<Strategy, 'id' | 'createdAt' | 'updatedAt'>
+
 export interface BinancePosition {
   symbol: string
   positionAmt: string   // 양수=롱, 음수=숏
