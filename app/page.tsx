@@ -10,15 +10,17 @@ import TradeForm from '@/components/TradeForm'
 import DashboardTab from '@/components/tabs/DashboardTab'
 import JournalTab from '@/components/tabs/JournalTab'
 import StatsTab from '@/components/tabs/StatsTab'
+import CalculatorTab from '@/components/tabs/CalculatorTab'
 
 const ALLOWED_UID = process.env.NEXT_PUBLIC_ALLOWED_UID
 
-type TabId = 'dashboard' | 'journal' | 'stats'
+type TabId = 'dashboard' | 'journal' | 'stats' | 'calculator'
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
-  { id: 'dashboard', label: '대시보드', icon: '🏠' },
-  { id: 'journal',   label: '일지',     icon: '📋' },
-  { id: 'stats',     label: '통계',     icon: '📊' },
+  { id: 'dashboard',  label: '대시보드', icon: '🏠' },
+  { id: 'journal',    label: '일지',     icon: '📋' },
+  { id: 'stats',      label: '통계',     icon: '📊' },
+  { id: 'calculator', label: '계산기',   icon: '🧮' },
 ]
 
 export default function Home() {
@@ -242,6 +244,7 @@ export default function Home() {
             loading={allTradesLoading}
           />
         )}
+        {tab === 'calculator' && <CalculatorTab user={user} />}
       </main>
 
       {/* ── 모바일 하단 탭 바 ── */}

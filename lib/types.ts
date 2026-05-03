@@ -46,6 +46,16 @@ export interface Trade {
 
 export type NewTrade = Omit<Trade, 'id' | 'createdAt' | 'updatedAt'>
 
+export interface BinancePosition {
+  symbol: string
+  positionAmt: string   // 양수=롱, 음수=숏
+  entryPrice: string
+  markPrice: string
+  unRealizedProfit: string
+  leverage: string
+  positionSide: string
+}
+
 export interface MarketEvent {
   id: string
   date: Timestamp
