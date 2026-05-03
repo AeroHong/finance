@@ -68,6 +68,8 @@ export interface Strategy {
   status: 'active' | 'closed'
   createdAt: import('firebase/firestore').Timestamp
   updatedAt: import('firebase/firestore').Timestamp
+  strategyType?: 'entry' | 'scalein'
+  baseSl?: number
 }
 
 export type NewStrategy = Omit<Strategy, 'id' | 'createdAt' | 'updatedAt'>
