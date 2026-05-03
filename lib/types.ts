@@ -94,6 +94,15 @@ export interface MarketEvent {
   relatedTrades: string[]
 }
 
+export interface AiStrategyPayload {
+  direction: 'long' | 'short'
+  entries: Array<{ price: number; qty: number }>
+  sl: number
+  tp1: number
+  tp2: number
+  rr: number
+}
+
 export interface MonthlySummary {
   id: string  // "2026-04"
   totalProfit: number

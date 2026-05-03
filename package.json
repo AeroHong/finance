@@ -8,8 +8,10 @@
     "start": "next start"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "firebase": "^12.12.0",
     "firebase-admin": "^13.8.0",
+    "lightweight-charts": "^5.2.0",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",

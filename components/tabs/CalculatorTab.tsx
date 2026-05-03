@@ -2,28 +2,30 @@
 
 import { useState } from 'react'
 import { User } from 'firebase/auth'
-import { BinancePosition } from '@/lib/types'
+import { BinancePosition, AiStrategyPayload } from '@/lib/types'
 import MarketDataBar from '@/components/calculator/MarketDataBar'
 import EntryCalculator from '@/components/calculator/EntryCalculator'
 import ScaleInCalculator from '@/components/calculator/ScaleInCalculator'
+import AiAnalysisPanel from '@/components/calculator/AiAnalysisPanel'
 
 interface CalculatorTabProps {
   user: User
 }
 
-type Section = '전략 계획기' | '분할 진입'
+type Section = '전략 수립' | '추가 진입' | 'AI 분석'
 
-const SECTIONS: Section[] = ['전략 계획기', '분할 진입']
+const SECTIONS: Section[] = ['전략 수립', '추가 진입', 'AI 분석']
 
 export default function CalculatorTab({ user }: CalculatorTabProps) {
   const [btcPrice, setBtcPrice] = useState<number | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
   const [positions, setPositions] = useState<BinancePosition[]>([])
-  const [section, setSection] = useState<Section>('전략 계획기')
+  const [section, setSection] = useState<Section>('전략 수립')
+  const [pendingStrategy, setPendingStrategy] = useState<AiStrategyPayload | null>(null)
 
   return (
     <div>
-      <h1 className="text-lg font-bold text-white mb-4">🧮 계산기</h1>
+      <h1 className="text-lg font-bold text-white mb-4">📐 전략 플래너</h1>
 
       <MarketDataBar
         user={user}
@@ -50,19 +52,31 @@ export default function CalculatorTab({ user }: CalculatorTabProps) {
       </div>
 
       {/* 내용 */}
-      {section === '전략 계획기' && (
+      {section === '전략 수립' && (
         <EntryCalculator
           currentPrice={btcPrice}
           balance={balance}
           user={user}
+          pendingStrategy={pendingStrategy}
         />
       )}
-      {section === '분할 진입' && (
+      {section === '추가 진입' && (
         <ScaleInCalculator
           currentPrice={btcPrice}
           balance={balance}
           openPositions={positions}
           user={user}
+        />
+      )}
+      {section === 'AI 분석' && (
+        <AiAnalysisPanel
+          user={user}
+          balance={balance}
+          openPositions={positions}
+          onApplyStrategy={(strategy) => {
+            setSection('전략 수립')
+            setPendingStrategy(strategy)
+          }}
         />
       )}
     </div>

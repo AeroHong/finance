@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { User } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { StrategyEntry, Strategy, NewStrategy } from '@/lib/types'
+import { StrategyEntry, Strategy, NewStrategy, AiStrategyPayload } from '@/lib/types'
 import {
   getStrategies,
   saveStrategy,
@@ -15,6 +15,7 @@ interface EntryCalculatorProps {
   currentPrice: number | null
   balance: number | null
   user: User
+  pendingStrategy?: AiStrategyPayload | null
 }
 
 const RR_PRESETS = ['1.5', '2.0', '2.5', '3.0']
@@ -29,7 +30,7 @@ function fmtBtc(n: number): string {
   return n.toFixed(4)
 }
 
-export default function EntryCalculator({ currentPrice, balance, user }: EntryCalculatorProps) {
+export default function EntryCalculator({ currentPrice, balance, user, pendingStrategy }: EntryCalculatorProps) {
   // 설정
   const [direction, setDirection] = useState<'long' | 'short'>('long')
   const [riskPct, setRiskPct] = useState('3')
@@ -72,6 +73,20 @@ export default function EntryCalculator({ currentPrice, balance, user }: EntryCa
     loadStrategies()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.uid])
+
+  // AI 분석 패널에서 전략 수신 시 자동 적용
+  useEffect(() => {
+    if (!pendingStrategy) return
+    setDirection(pendingStrategy.direction)
+    if (pendingStrategy.entries.length > 0) {
+      setEntries(pendingStrategy.entries.map((e, i) => ({
+        id: Date.now().toString() + i,
+        price: e.price,
+        qty: e.qty,
+        executed: false,
+      })))
+    }
+  }, [pendingStrategy])
 
   // 계산 (derived values)
   const cap = balance ?? 0

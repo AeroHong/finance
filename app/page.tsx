@@ -20,7 +20,7 @@ const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'dashboard',  label: '대시보드', icon: '🏠' },
   { id: 'journal',    label: '일지',     icon: '📋' },
   { id: 'stats',      label: '통계',     icon: '📊' },
-  { id: 'calculator', label: '계산기',   icon: '🧮' },
+  { id: 'calculator', label: '전략 플래너', icon: '📐' },
 ]
 
 export default function Home() {
