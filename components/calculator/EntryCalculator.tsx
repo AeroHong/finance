@@ -569,58 +569,59 @@ export default function EntryCalculator({ currentPrice, balance, user, pendingSt
             placeholder={`BTC ${direction === 'long' ? '롱' : '숏'} ${new Date().toLocaleDateString('ko-KR')}`}
             className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
           />
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
-            >
-              {saving ? '저장 중...' : '💾 전략 저장'}
-            </button>
-            <button
-              onClick={() => { setShowStrategies(!showStrategies); if (!showStrategies) loadStrategies() }}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm transition-colors"
-            >
-              📂 {strategies.length > 0 ? `(${strategies.length})` : ''}
-            </button>
-          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            {saving ? '저장 중...' : '💾 전략 저장'}
+          </button>
         </div>
       )}
 
-      {/* 저장된 전략 목록 패널 */}
-      {showStrategies && (
-        <div className="border-t border-gray-700 pt-4 space-y-2">
-          <div className="text-xs text-gray-500 mb-2">저장된 전략</div>
-          {loading ? (
-            <div className="text-sm text-gray-500">불러오는 중...</div>
-          ) : strategies.length === 0 ? (
-            <div className="text-sm text-gray-500">저장된 전략 없음</div>
-          ) : (
-            strategies.map((s) => (
-              <div key={s.id} className="flex items-center gap-2 bg-gray-800 rounded-xl px-3 py-2">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-white truncate">{s.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {s.direction === 'long' ? '롱' : '숏'} · {s.entries.length}개 진입 · SL ${fmt(s.sl)} · TP ${fmt(s.tp)}
+      {/* 저장된 전략 불러오기 — 항상 표시 */}
+      <div className="border-t border-gray-700 pt-4">
+        <button
+          onClick={() => { setShowStrategies(!showStrategies); if (!showStrategies) loadStrategies() }}
+          className="w-full flex items-center justify-between px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm text-gray-300 transition-colors"
+        >
+          <span>📂 저장된 전략 불러오기{strategies.length > 0 ? ` (${strategies.length})` : ''}</span>
+          <span className="text-gray-500">{showStrategies ? '▲' : '▼'}</span>
+        </button>
+
+        {showStrategies && (
+          <div className="mt-2 space-y-2">
+            {loading ? (
+              <div className="text-sm text-gray-500 px-1">불러오는 중...</div>
+            ) : strategies.length === 0 ? (
+              <div className="text-sm text-gray-500 px-1">저장된 전략 없음</div>
+            ) : (
+              strategies.map((s) => (
+                <div key={s.id} className="flex items-center gap-2 bg-gray-800 rounded-xl px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white truncate">{s.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {s.direction === 'long' ? '롱' : '숏'} · {s.entries.length}개 진입 · SL ${fmt(s.sl)} · TP ${fmt(s.tp)}
+                    </div>
                   </div>
+                  <button
+                    onClick={() => loadStrategy(s)}
+                    className="text-xs px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                  >
+                    불러오기
+                  </button>
+                  <button
+                    onClick={() => handleDelete(s.id)}
+                    className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <button
-                  onClick={() => loadStrategy(s)}
-                  className="text-xs px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                >
-                  불러오기
-                </button>
-                <button
-                  onClick={() => handleDelete(s.id)}
-                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
     </div>
   )
