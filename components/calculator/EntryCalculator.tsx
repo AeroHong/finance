@@ -35,6 +35,7 @@ export default function EntryCalculator({ currentPrice, balance, user }: EntryCa
   const [riskPct, setRiskPct] = useState('3')
   const [rrRatio, setRrRatio] = useState('2')
   const [leverage, setLeverage] = useState('10')
+  const [tpMode, setTpMode] = useState<'single' | 'split_be'>('split_be')
 
   // 진입 리스트
   const [entries, setEntries] = useState<StrategyEntry[]>([])
@@ -89,11 +90,23 @@ export default function EntryCalculator({ currentPrice, balance, user }: EntryCa
         : avgEntry + (cap * riskP / 100) / totalQty)
     : NaN
 
-  const tp = isFinite(sl) && isFinite(rr)
-    ? (direction === 'long'
-        ? avgEntry + rr * (avgEntry - sl)
-        : avgEntry - rr * (sl - avgEntry))
+  const slDist = isFinite(sl) && isFinite(avgEntry) ? Math.abs(avgEntry - sl) : NaN
+
+  // 단일 TP (rrRatio R)
+  const tp = isFinite(slDist) && isFinite(rr)
+    ? (direction === 'long' ? avgEntry + rr * slDist : avgEntry - rr * slDist)
     : NaN
+
+  // 2분할 BE 스탑 — TP1 = 1R, TP2 = rrRatio R, BE = 평단
+  const tp1 = isFinite(slDist) ? (direction === 'long' ? avgEntry + slDist : avgEntry - slDist) : NaN
+  const tp2 = tp  // rrRatio R (tp와 동일)
+  const beStop = isFinite(avgEntry) ? avgEntry : NaN
+
+  // 예상 수익 (2분할: 50%씩)
+  const expectedProfitSplit = isFinite(slDist) && isFinite(rr) && isFinite(totalQty)
+    ? totalQty * slDist * (0.5 + 0.5 * rr)
+    : NaN
+  const avgRrSplit = isFinite(rr) ? 0.5 + 0.5 * rr : NaN
 
   const riskAmount = cap * riskP / 100
 
@@ -277,6 +290,35 @@ export default function EntryCalculator({ currentPrice, balance, user }: EntryCa
         ))}
       </div>
 
+      {/* 익절 방식 */}
+      <div>
+        <label className="text-xs text-gray-400 mb-1 block">익절 방식</label>
+        <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
+          <button
+            onClick={() => setTpMode('single')}
+            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              tpMode === 'single' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            단일 TP
+          </button>
+          <button
+            onClick={() => setTpMode('split_be')}
+            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              tpMode === 'split_be' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            2분할 BE 스탑 ★
+          </button>
+        </div>
+        {tpMode === 'split_be' && isFinite(avgRrSplit) && (
+          <div className="text-xs text-gray-500 mt-1">
+            평균 RR <span className="text-blue-400">{avgRrSplit.toFixed(2)} R</span>
+            <span className="ml-2">(TP1 1R × 50% + TP2 {isFinite(rr) ? rr.toFixed(1) : '—'}R × 50%)</span>
+          </div>
+        )}
+      </div>
+
       {/* 진입 리스트 */}
       {entries.length > 0 && (
         <div className="space-y-2">
@@ -381,10 +423,27 @@ export default function EntryCalculator({ currentPrice, balance, user }: EntryCa
                 <span className="text-gray-400">SL</span>
                 <span className="text-red-400">${fmt(sl)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">TP</span>
-                <span className="text-green-400">${fmt(tp)}</span>
-              </div>
+              {tpMode === 'single' ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">TP</span>
+                  <span className="text-green-400">${fmt(tp)}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">TP1 <span className="text-gray-600">(50%)</span></span>
+                    <span className="text-green-400">${fmt(tp1)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">TP2 <span className="text-gray-600">(50%)</span></span>
+                    <span className="text-green-400">${fmt(tp2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">BE 스탑</span>
+                    <span className="text-yellow-400">${fmt(beStop)}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* 체결됨만 */}
@@ -403,10 +462,31 @@ export default function EntryCalculator({ currentPrice, balance, user }: EntryCa
                   <span className="text-gray-400">SL</span>
                   <span className="text-red-400">${fmt(execSl)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">TP</span>
-                  <span className="text-green-400">${fmt(execTp)}</span>
-                </div>
+                {tpMode === 'single' ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">TP</span>
+                    <span className="text-green-400">${fmt(execTp)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">TP1 <span className="text-gray-600">(50%)</span></span>
+                      <span className="text-green-400">
+                        ${fmt(isFinite(execSl) && isFinite(execAvg)
+                          ? (direction === 'long' ? execAvg + Math.abs(execAvg - execSl) : execAvg - Math.abs(execAvg - execSl))
+                          : NaN)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">TP2 <span className="text-gray-600">(50%)</span></span>
+                      <span className="text-green-400">${fmt(execTp)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">BE 스탑</span>
+                      <span className="text-yellow-400">${fmt(execAvg)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -422,12 +502,17 @@ export default function EntryCalculator({ currentPrice, balance, user }: EntryCa
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">손익비</span>
-              <span className="text-white">{isFinite(rr) ? rr.toFixed(1) : '—'} R</span>
+              <span className="text-white">
+                {tpMode === 'split_be' && isFinite(avgRrSplit)
+                  ? <>{avgRrSplit.toFixed(2)} R <span className="text-gray-500 text-xs">(평균)</span></>
+                  : isFinite(rr) ? `${rr.toFixed(1)} R` : '—'
+                }
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">예상 수익</span>
               <span className="text-green-400">
-                +${fmt(isFinite(tp) && isFinite(avgEntry) ? totalQty * Math.abs(tp - avgEntry) : NaN)}
+                +${fmt(tpMode === 'split_be' ? expectedProfitSplit : (isFinite(tp) && isFinite(avgEntry) ? totalQty * Math.abs(tp - avgEntry) : NaN))}
               </span>
             </div>
             <div className="flex justify-between text-sm">
