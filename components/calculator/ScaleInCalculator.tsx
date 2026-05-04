@@ -56,6 +56,7 @@ export default function ScaleInCalculator({
   const [showStrategies, setShowStrategies] = useState(false)
   const [strategyName, setStrategyName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [loadingStrats, setLoadingStrats] = useState(false)
 
   // 기타
@@ -212,6 +213,7 @@ export default function ScaleInCalculator({
   async function handleSave() {
     if (!hasBase) return
     setSaving(true)
+    setSaveError(null)
     try {
       const baseEntry: StrategyEntry = {
         id: 'base',
@@ -234,11 +236,13 @@ export default function ScaleInCalculator({
         totalQty,
         status: 'active',
         strategyType: 'scalein',
-        baseSl: isFinite(baseSlVal) ? baseSlVal : undefined,
+        ...(isFinite(baseSlVal) && baseSlVal > 0 ? { baseSl: baseSlVal } : {}),
       }
       await saveStrategy(user.uid, data)
       await loadStrategies()
       setStrategyName('')
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : '저장 실패')
     } finally {
       setSaving(false)
     }
@@ -507,6 +511,9 @@ export default function ScaleInCalculator({
           <input value={strategyName} onChange={e => setStrategyName(e.target.value)}
             placeholder={`BTC ${direction === 'long' ? '롱' : '숏'} 분할 ${new Date().toLocaleDateString('ko-KR')}`}
             className="w-full bg-gray-800 text-white rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500" />
+          {saveError && (
+            <div className="text-red-400 text-xs">⚠️ {saveError}</div>
+          )}
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={saving}
               className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors">
