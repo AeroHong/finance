@@ -148,6 +148,7 @@ export const syncBinanceTrades = onSchedule(
   {
     schedule: 'every 5 minutes',
     timeZone: 'Asia/Seoul',
+    region: 'asia-southeast1',
     secrets: ['BINANCE_API_KEY', 'BINANCE_API_SECRET'],
   },
   async () => {
@@ -160,6 +161,10 @@ export const syncBinanceTrades = onSchedule(
       const count = await syncTrades(uid)
       console.log(`동기화 완료: ${count}건`)
     } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 451) {
+        console.error('Binance 지역 차단(451) - 리전 설정 확인 필요')
+        return
+      }
       console.error('Binance 동기화 실패:', err)
     }
   }
@@ -168,6 +173,7 @@ export const syncBinanceTrades = onSchedule(
 // ── 수동 동기화 트리거 (클라이언트 호출용) ───────────────────
 export const manualSyncTrades = onCall(
   {
+    region: 'asia-southeast1',
     secrets: ['BINANCE_API_KEY', 'BINANCE_API_SECRET'],
   },
   async (request) => {

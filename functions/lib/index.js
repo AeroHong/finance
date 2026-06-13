@@ -155,6 +155,7 @@ async function syncTrades(uid) {
 exports.syncBinanceTrades = (0, scheduler_1.onSchedule)({
     schedule: 'every 5 minutes',
     timeZone: 'Asia/Seoul',
+    region: 'asia-southeast1',
     secrets: ['BINANCE_API_KEY', 'BINANCE_API_SECRET'],
 }, async () => {
     const uid = process.env.ALLOWED_UID;
@@ -167,11 +168,16 @@ exports.syncBinanceTrades = (0, scheduler_1.onSchedule)({
         console.log(`동기화 완료: ${count}건`);
     }
     catch (err) {
+        if (axios_1.default.isAxiosError(err) && err.response?.status === 451) {
+            console.error('Binance 지역 차단(451) - 리전 설정 확인 필요');
+            return;
+        }
         console.error('Binance 동기화 실패:', err);
     }
 });
 // ── 수동 동기화 트리거 (클라이언트 호출용) ───────────────────
 exports.manualSyncTrades = (0, https_1.onCall)({
+    region: 'asia-southeast1',
     secrets: ['BINANCE_API_KEY', 'BINANCE_API_SECRET'],
 }, async (request) => {
     if (!request.auth)
